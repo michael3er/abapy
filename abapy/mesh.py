@@ -2221,7 +2221,7 @@ class Mesh(object):
     
   def volume(self):
     """
-    Returns a dictionnary containing the volume of all the elements.
+    Returns a dictionary containing the volume of all the elements.
     
     .. plot:: example_code/mesh/Mesh-volume.py
      :include-source:
@@ -2237,7 +2237,7 @@ class Mesh(object):
       w = vertices[2]
       return np.linalg.norm(np.cross( v-u, w-u)) / 2.
     
-    def tetra_area(vertices):
+    def tetra_volume(vertices):
       u = vertices[0]
       v = vertices[1]
       w = vertices[2]
@@ -2261,36 +2261,59 @@ class Mesh(object):
         if len(c) == 3:  # Triangle
           volume[n] = tri_area(vertices)
         if len(c) == 4:  # Quadrangle
-          t0 =  vertices[[0,1,2]]
-          t1 =  vertices[[2,3,0]] 
+          t0 = vertices[[0,1,2]]
+          t1 = vertices[[2,3,0]]
           a0 = tri_area(t0)  
           a1 = tri_area(t1)
           volume[n] = a0 + a1   
-      if s == 3: # 3D
+      elif s == 3: # 3D
         if len(c) == 4: # Tretrahedron
-          volume[n] = tetra_area(vertices)
-        if len(c) == 6: #Prism
-          t0 =  vertices[[0,1,2,3]]
-          t1 =  vertices[[1,2,3,4]]
-          t2 =  vertices[[2,3,4,5]] 
-          a0 = tetra_area(t0)  
-          a1 = tetra_area(t1)
-          a2 = tetra_area(t2)
+          volume[n] = tetra_volume(vertices)
+        elif len(c) == 6: #Prism
+          t0 = vertices[[0,1,2,3]]
+          t1 = vertices[[1,2,3,4]]
+          t2 = vertices[[2,3,4,5]]
+          a0 = tetra_volume(t0)
+          a1 = tetra_volume(t1)
+          a2 = tetra_volume(t2)
           volume[n] = a0 + a1 + a2
-        if len(c) == 8: #Hexahedron
-          t0 =  vertices[[0,1,3,4]]
-          t1 =  vertices[[1,2,3,4]]
-          t2 =  vertices[[2,3,7,4]]
-          t3 =  vertices[[2,6,7,4]]
-          t4 =  vertices[[1,5,2,4]]
-          t5 =  vertices[[2,5,6,4]]
-          a0 = tetra_area(t0)  
-          a1 = tetra_area(t1)
-          a2 = tetra_area(t2)
-          a3 = tetra_area(t3)  
-          a4 = tetra_area(t4)
-          a5 = tetra_area(t5)
-          volume[n] = a0 + a1 + a2 + a3 + a4 + a5   
+        elif len(c) == 8: #Hexahedron
+          print 'WARNING: Hexa volume may be inaccurately represented by tetras'
+          t0 = vertices[[0,1,3,4]]
+          t1 = vertices[[1,2,3,4]]
+          t2 = vertices[[2,3,7,4]]
+          t3 = vertices[[2,6,7,4]]
+          t4 = vertices[[1,5,2,4]]
+          t5 = vertices[[2,5,6,4]]
+          a0 = tetra_volume(t0)
+          a1 = tetra_volume(t1)
+          a2 = tetra_volume(t2)
+          a3 = tetra_volume(t3)
+          a4 = tetra_volume(t4)
+          a5 = tetra_volume(t5)
+          volume[n] = a0 + a1 + a2 + a3 + a4 + a5
+        elif len(c) == 10:  # Quadratic tetrahedron
+          t0 = vertices[[0, 4, 6, 7]]
+          t1 = vertices[[6, 5, 2, 9]]
+          t2 = vertices[[4, 1, 5, 8]]
+          t3 = vertices[[6, 4, 5, 8]]
+          t4 = vertices[[4, 6, 7, 8]]
+          t5 = vertices[[6, 5, 8, 9]]
+          t6 = vertices[[6, 7, 8, 9]]
+          t7 = vertices[[7, 8, 9, 3]]
+          v0 = tetra_volume(t0)
+          v1 = tetra_volume(t1)
+          v2 = tetra_volume(t2)
+          v3 = tetra_volume(t3)
+          v4 = tetra_volume(t4)
+          v5 = tetra_volume(t5)
+          v6 = tetra_volume(t6)
+          v7 = tetra_volume(t7)
+          volume[n] = v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7
+        else:
+          raise NotImplementedError("Elements with {} node not supported".format(len(c)))
+      else:
+        raise ValueError("Space must be 2D or 3D")
     return volume  
     
     
