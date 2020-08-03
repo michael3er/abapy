@@ -2225,13 +2225,10 @@ class VectorFieldOutput:
     if (type(other) in [int, float, long] or isinstance(other, FieldOutput) or isinstance(other, VectorFieldOutput)) == False:
       return NotImplemented
     return (self * other).sum()
-    
+
   def __neg__(self):
-    if (type(other) in [int, float, long] or isinstance(other, FieldOutput) or isinstance(other, VectorFieldOutput)) == False:
-      return NotImplemented
-    other = 1.
     s1, s2, s3 = self.get_coord(1), self.get_coord(2), self.get_coord(3)
-    return VectorFieldOutput(data1 = -s1, data2 = -s2, data3 = -s3)
+    return VectorFieldOutput(data1=-s1, data2=-s2, data3=-s3)
     
   def __sub__(self, other):
     if type(other) in [int, float, long] or isinstance(other, FieldOutput) or isinstance(other, VectorFieldOutput) == False:
