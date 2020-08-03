@@ -2009,7 +2009,7 @@ class VectorFieldOutput:
     
     :rtype: FieldOutput instance
     '''
-    return (( self * self )**.5).sum()
+    return (self * self).sum() ** .5
      
   def get_coord(self,number):
     '''
