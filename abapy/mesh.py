@@ -2147,7 +2147,7 @@ class Mesh(object):
       w = vertices[2]
       return np.linalg.norm(np.cross( v-u, w-u)) / 2.
     
-    def tetra_area(vertices):
+    def tetra_volume(vertices):
       u = vertices[0]
       v = vertices[1]
       w = vertices[2]
@@ -2174,29 +2174,31 @@ class Mesh(object):
       if s == 2: # 2D
         if len(c) == 3:  # Triangle
           centroids[n] = simplex_centroid(vertices)
-        if len(c) == 4:  # Quadrangle
+        elif len(c) == 4:  # Quadrangle
           t0 =  vertices[[0,1,2]]
           t1 =  vertices[[2,3,0]] 
           a0 = tri_area(t0)  
           a1 = tri_area(t1)
           c0 = simplex_centroid(t0)
           c1 = simplex_centroid(t1)
-          centroids[n] = (c0 * a0 + c1 * a1) / (a0 + a1)   
+          centroids[n] = (c0 * a0 + c1 * a1) / (a0 + a1)
+        else:
+          raise NotImplementedError("{}D Elements with {} node not supported".format(space, len(c)))
       if s == 3: # 3D
         if len(c) == 4: # Tretrahedron
           centroids[n] = simplex_centroid(vertices)
-        if len(c) == 6: #Prism
+        elif len(c) == 6: #Prism
           t0 =  vertices[[0,1,2,3]]
           t1 =  vertices[[1,2,3,4]]
           t2 =  vertices[[2,3,4,5]] 
-          a0 = tetra_area(t0)  
-          a1 = tetra_area(t1)
-          a2 = tetra_area(t2)
+          a0 = tetra_volume(t0)
+          a1 = tetra_volume(t1)
+          a2 = tetra_volume(t2)
           c0 = simplex_centroid(t0)
           c1 = simplex_centroid(t1)
           c2 = simplex_centroid(t2)
           centroids[n] = (c0 * a0 + c1 * a1 + c2 * a2) / (a0 + a1 + a2)
-        if len(c) == 8: #Hexahedron
+        elif len(c) == 8: #Hexahedron
           t0 =  vertices[[0,1,3,4]]
           t1 =  vertices[[1,2,3,4]]
           t2 =  vertices[[2,3,7,4]]
@@ -2204,19 +2206,48 @@ class Mesh(object):
           t4 =  vertices[[1,5,2,4]]
           t5 =  vertices[[2,5,6,4]]
            
-          a0 = tetra_area(t0)  
-          a1 = tetra_area(t1)
-          a2 = tetra_area(t2)
-          a3 = tetra_area(t3)  
-          a4 = tetra_area(t4)
-          a5 = tetra_area(t5)
+          a0 = tetra_volume(t0)
+          a1 = tetra_volume(t1)
+          a2 = tetra_volume(t2)
+          a3 = tetra_volume(t3)
+          a4 = tetra_volume(t4)
+          a5 = tetra_volume(t5)
           c0 = simplex_centroid(t0)
           c1 = simplex_centroid(t1)
           c2 = simplex_centroid(t2)
           c3 = simplex_centroid(t3)
           c4 = simplex_centroid(t4)
           c5 = simplex_centroid(t5)
-          centroids[n] = (c0 * a0 + c1 * a1 + c2 * a2 + c3 * a3 + c4 * a4 + c5 * a5) / (a0 + a1 + a2 + a3 + a4 + a5)       
+          centroids[n] = (c0 * a0 + c1 * a1 + c2 * a2 + c3 * a3 + c4 * a4 + c5 * a5) / (a0 + a1 + a2 + a3 + a4 + a5)
+        elif len(c) == 10:  # Quadratic tetrahedron
+          t0 = vertices[[0, 4, 6, 7]]
+          t1 = vertices[[6, 5, 2, 9]]
+          t2 = vertices[[4, 1, 5, 8]]
+          t3 = vertices[[6, 4, 5, 8]]
+          t4 = vertices[[4, 6, 7, 8]]
+          t5 = vertices[[6, 5, 8, 9]]
+          t6 = vertices[[6, 7, 8, 9]]
+          t7 = vertices[[7, 8, 9, 3]]
+          a0 = tetra_volume(t0)
+          a1 = tetra_volume(t1)
+          a2 = tetra_volume(t2)
+          a3 = tetra_volume(t3)
+          a4 = tetra_volume(t4)
+          a5 = tetra_volume(t5)
+          a6 = tetra_volume(t6)
+          a7 = tetra_volume(t7)
+          c0 = simplex_centroid(t0)
+          c1 = simplex_centroid(t1)
+          c2 = simplex_centroid(t2)
+          c3 = simplex_centroid(t3)
+          c4 = simplex_centroid(t4)
+          c5 = simplex_centroid(t5)
+          c6 = simplex_centroid(t6)
+          c7 = simplex_centroid(t7)
+          centroids[n] = (c0 * a0 + c1 * a1 + c2 * a2 + c3 * a3 + c4 * a4 + c5 * a5 + c6 * a6 + c7 * a7)\
+                         / (a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7)
+        else:
+          raise NotImplementedError("{}D Elements with {} node not supported".format(space, len(c)))
     return centroids
     
   def volume(self):
@@ -2243,8 +2274,6 @@ class Mesh(object):
       w = vertices[2]
       x = vertices[3]
       return abs(np.cross(v-u, w-u).dot(x-u)) / 6. 
-     
-
 
     volume = np.zeros([len(conn)])
     for n in xrange(len(conn)):
@@ -2260,12 +2289,14 @@ class Mesh(object):
       if s == 2: # 2D
         if len(c) == 3:  # Triangle
           volume[n] = tri_area(vertices)
-        if len(c) == 4:  # Quadrangle
+        elif len(c) == 4:  # Quadrangle
           t0 = vertices[[0,1,2]]
           t1 = vertices[[2,3,0]]
           a0 = tri_area(t0)  
           a1 = tri_area(t1)
-          volume[n] = a0 + a1   
+          volume[n] = a0 + a1
+        else:
+          raise NotImplementedError("{}D Elements with {} node not supported".format(space, len(c)))
       elif s == 3: # 3D
         if len(c) == 4: # Tretrahedron
           volume[n] = tetra_volume(vertices)
@@ -2311,7 +2342,7 @@ class Mesh(object):
           v7 = tetra_volume(t7)
           volume[n] = v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7
         else:
-          raise NotImplementedError("Elements with {} node not supported".format(len(c)))
+          raise NotImplementedError("{}D Elements with {} node not supported".format(space, len(c)))
       else:
         raise ValueError("Space must be 2D or 3D")
     return volume  
