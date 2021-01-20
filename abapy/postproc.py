@@ -56,7 +56,92 @@ def GetMesh(odb,instance,dti='I'):
   return mesh
 
 
+def GetMesh_byInp(inp_file_path, part_name, dti='I'):
+  '''Retrieves mesh of an instance in an Abaqus input file.
 
+  :param inp_file_path: file path of .inp file
+  :type inp_file_path: string
+  :param part_name: instance name declared in the Abaqus inp file.
+  :type part_name: string
+  :param dti: int data type in array.array
+  :type dti: 'I' or 'H'
+
+  :rtype: Mesh instance
+
+
+  '''
+  from mesh import Mesh, Nodes
+  from array import array
+  import numpy as np
+  def sort_multiple_by_labels(labels, *vectors):
+    ix = np.argsort(labels)
+    try:
+      out = [array(labels.typecode, np.asarray(labels)[ix])]
+    except AttributeError:
+      out = [type(labels)(np.asarray(labels)[ix])]
+    for v in vectors:
+      try:
+        out.append(array(v.typecode, np.asarray(v)[ix]))
+      except AttributeError:
+        out.append(type(v)(np.asarray(v)[ix]))
+    return tuple(out)
+
+  with open(inp_file_path) as inp_file:
+    dtf = 'd'
+    dti = 'I'
+    nodes = Nodes(dtf=dtf, dti=dti)
+    mesh = Mesh(nodes=nodes)
+    part_found = False
+    for line in inp_file:
+      if not part_found:
+        if line.startswith("*Part"):  # find line containing Part keyword
+          if part_name.lower() in line.lower():
+            part_found = True
+        continue
+      line_split = tuple(item.strip() for item in line.split(","))
+      if line.startswith("*"):
+        if line.startswith("*End Part"):
+          break
+        keyword = line_split[0].strip().lower()[1:]
+        params = [p.strip() for p in line_split[1:]]
+        continue
+      if keyword == "node":
+        #   11879,   9.21378326,   9.06270313,  -17.3212605
+        # data = [int(line_split[0]), np.float32(line_split[1]), np.float32(line_split[2]), np.float32(line_split[3])]
+        # mesh.nodes.add_node(*data)
+        mesh.nodes.labels.append(int(line_split[0]))
+        mesh.nodes.x.append(float(line_split[1]))
+        mesh.nodes.y.append(float(line_split[2]))
+        mesh.nodes.z.append(float(line_split[3]))
+      elif keyword == "element":
+        space = 3
+        #  36315,  21014,  20976,   9179,  18225, 104856, 104349, 104857, 104858, 104354,  68560
+        element_type = params[0][5:]
+        label = int(line_split[0])
+        connectivity = np.array(line_split[1:], dtype=int)
+        # mesh.add_element(label=label, connectivity=connectivity, space=space, name=element_type)
+        mesh.connectivity.append(array(dti, connectivity))
+        mesh.labels.append(label)
+        mesh.space.append(space)
+        mesh.name.append(element_type)
+      elif keyword == "nset":  # *Nset, nset=Femur_Mplus_right_ISO-RefPt_, internal ; *Nset, nset="ISOfem Origin Set" ; *Nset, nset="Femur Articulating Surface Set", generate
+        set_name = params[0].split("=")[1].strip().replace("\"", "")
+        # todo node set handling
+      elif keyword == "elset":  # *Elset, elset="_Femur Articulating Surface_SPOS", internal, generate
+        set_name = params[0].split("=")[1].strip().replace("\"", "")
+        # todo element set handling
+      elif keyword == "surface":
+        # todo surface handling
+        pass
+      else:
+        # todo solid section handling
+        print "Warning: unknown keyword \"{}\"".format(keyword)
+    if not part_found:
+      raise ValueError("part \"{}\" not found in {}".format(part_name, inp_file_path))
+    mesh.labels, mesh.connectivity, mesh.space, mesh.name = sort_multiple_by_labels(mesh.labels, mesh.connectivity,
+                                                                                    mesh.space, mesh.name)
+    nodes.labels, nodes.x, nodes.y, nodes.z = sort_multiple_by_labels(nodes.labels, nodes.x, nodes.y, nodes.z)
+    return mesh
 
 
 
