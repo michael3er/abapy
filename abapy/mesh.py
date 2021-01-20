@@ -4,6 +4,7 @@ Mesh
 '''
 
 import copy
+import numpy as np
 
 class Nodes(object):
   '''
@@ -320,7 +321,6 @@ class Nodes(object):
     mynewset	1,2'''
     
     from array import array
-    sets = self.sets
     label2 = label.lower()
     '''
     if label != label2:
@@ -330,18 +330,14 @@ class Nodes(object):
         print 'A node set was renamed'
     '''
     label = label2
-    if label not in sets: sets[label] = array(self.dti,[])
-    s = sets[label]
-    if type(nodes) == int: nodes = [nodes]
-    if '__getitem__' in dir(nodes):
-      for node in nodes:
-        if node in self.labels:
-          if node not in self.sets[label]: 
-            s.append(node)
-          else:
-           print 'Info: node {0} was already in set {1}, node was not added to set'.format(node, label)
-        else:
-          print 'Info: node {0} does not exist, node was not added to set'.format(node)
+    if label not in self.sets:
+      self.sets[label] = array(self.dti,[])
+    if type(nodes) == int:
+      nodes = [nodes]
+    node_exists = np.in1d(nodes,self.labels)
+    if not np.all(node_exists):
+      print 'Info: not all nodes exist. These will not be added to the set '  # todo warnings.warn instead
+    self.sets[label]=array(self.dti, np.union1d(self.sets[label], np.asarray(nodes)[np.nonzero(node_exists)]).astype(int))
   
   def add_set_by_func(self, name, func):
     '''
@@ -1172,12 +1168,10 @@ class Mesh(object):
     if label2 not in self.sets: self.sets[label2] = array(self.dti,[])
     if type(elements) == int or type(elements) == long: elements = [elements]
     if len(elements) == 0: return
-    for i in elements:
-      if i in self.labels: 
-        self.sets[label2].append(i)
-      else:
-        print 'Info: element {0} does not exist, it was not added to set {1}.'.format(i,label2)
-    self.sets[label2] = list(set(self.sets[label2]))
+    element_exists = np.in1d(elements,self.labels)
+    if not np.all(element_exists):
+      print 'Info: not all nodes exist. These will not be added to the set '  # todo warnings.warn instead
+    self.sets[label2]=array(self.dti, np.union1d(self.sets[label2], np.asarray(elements)[np.nonzero(element_exists)]).astype(int))
   
   def add_surface(self, label, description):
     '''
@@ -2756,3 +2750,8 @@ def get_neighbors(points, crit_dist = 0.1, max_hits = 1):
   return neighbors 
   
 
+
+inp_file_path="C:\Users\Michael\ABAQUS\ISO1_0.inp"
+part_name="Inlay_M10_right_JWI"
+from abapy.postproc import GetMesh_byInp
+mesh=GetMesh_byInp(inp_file_path, part_name)

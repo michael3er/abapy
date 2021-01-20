@@ -56,20 +56,21 @@ def GetMesh(odb,instance,dti='I'):
   return mesh
 
 
-def GetMesh_byInp(inp_file_path, part_name, dti='I'):
+def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_internal_sets=False):
   '''Retrieves mesh of an instance in an Abaqus input file.
 
   :param inp_file_path: file path of .inp file
   :type inp_file_path: string
-  :param part_name: instance name declared in the Abaqus inp file.
+  :param instance_name: instance name declared in the Abaqus inp file.
+  :type instance_name: string
+  :param part_name: part name declared in the Abaqus inp file.
   :type part_name: string
   :param dti: int data type in array.array
   :type dti: 'I' or 'H'
 
   :rtype: Mesh instance
-
-
   '''
+  
   from mesh import Mesh, Nodes
   from array import array
   import numpy as np
@@ -86,64 +87,111 @@ def GetMesh_byInp(inp_file_path, part_name, dti='I'):
         out.append(type(v)(np.asarray(v)[ix]))
     return tuple(out)
 
+  if part_name is None:
+    with open(inp_file_path) as inp_file:
+      for line in inp_file:
+        if not line[0] == "*":  # for speed, hopefully
+          continue
+        if line.lower().startswith("*instance"):  # find line containing Instance keyword
+          line_split = tuple(item.strip() for item in line.split(","))
+          if instance_name.lower() in line.lower():
+            for p in line_split[1:]:
+              if "part" in p.lower() and instance_name.lower() in p.lower():
+                part_name = p.split("=")[1].strip().replace("\"", "")
+                break
+  if part_name is None:
+    raise ValueError("part name for instance {} not found".format(instance_name))
+
   with open(inp_file_path) as inp_file:
     dtf = 'd'
     dti = 'I'
     nodes = Nodes(dtf=dtf, dti=dti)
     mesh = Mesh(nodes=nodes)
-    part_found = False
+    in_part = False
+    line_no = -1
+    node_sets = dict()
+    element_sets = dict()
     for line in inp_file:
-      if not part_found:
-        if line.startswith("*Part"):  # find line containing Part keyword
-          if part_name.lower() in line.lower():
-            part_found = True
-        continue
-      line_split = tuple(item.strip() for item in line.split(","))
-      if line.startswith("*"):
-        if line.startswith("*End Part"):
-          break
+      line_no += 1
+      if line[0] == "*":
+        line_split = [item.strip() for item in line.split(",")]
         keyword = line_split[0].strip().lower()[1:]
         params = [p.strip() for p in line_split[1:]]
+        if keyword == "part" and part_name.lower() in line.lower():  # find line containing PART keyword
+          in_part = True
+        elif keyword == "end part":
+          in_part = False
+        # print "line {} *{}".format(line_no, keyword)
         continue
+
+      line_split = tuple(item.strip() for item in line.split(","))
       if keyword == "node":
-        #   11879,   9.21378326,   9.06270313,  -17.3212605
-        # data = [int(line_split[0]), np.float32(line_split[1]), np.float32(line_split[2]), np.float32(line_split[3])]
-        # mesh.nodes.add_node(*data)
+        if not in_part:
+          continue
         mesh.nodes.labels.append(int(line_split[0]))
         mesh.nodes.x.append(float(line_split[1]))
         mesh.nodes.y.append(float(line_split[2]))
         mesh.nodes.z.append(float(line_split[3]))
       elif keyword == "element":
-        space = 3
-        #  36315,  21014,  20976,   9179,  18225, 104856, 104349, 104857, 104858, 104354,  68560
-        element_type = params[0][5:]
+        if not in_part:
+          continue
+        space = 3  # todo check for 3D
+        element_type = params[0].split("=")[1].strip().replace("\"", "")
         label = int(line_split[0])
         connectivity = np.array(line_split[1:], dtype=int)
-        # mesh.add_element(label=label, connectivity=connectivity, space=space, name=element_type)
         mesh.connectivity.append(array(dti, connectivity))
         mesh.labels.append(label)
         mesh.space.append(space)
         mesh.name.append(element_type)
-      elif keyword == "nset":  # *Nset, nset=Femur_Mplus_right_ISO-RefPt_, internal ; *Nset, nset="ISOfem Origin Set" ; *Nset, nset="Femur Articulating Surface Set", generate
+      elif keyword == "nset":
         set_name = params[0].split("=")[1].strip().replace("\"", "")
-        # todo node set handling
-      elif keyword == "elset":  # *Elset, elset="_Femur Articulating Surface_SPOS", internal, generate
+        if any("internal" == p.lower() for p in params[1:]) and not read_internal_sets:
+          continue
+        if any("elset" in p.lower() for p in params[1:]):
+          raise NotImplementedError("ELSET= in *NSET")
+        if any("instance" in p.lower() for p in params[1:]):
+          if not any(instance_name.lower() in p.lower() for p in params[1:]):
+            continue
+        elif not in_part:
+          continue
+        if "generate" in params:
+          node_labels = range(int(line_split[0]), int(line_split[1]), int(line_split[2]))
+        else:
+          node_labels = [int(nl) for nl in line_split if nl != ""]
+        try:
+          node_sets[set_name].extend(node_labels)
+        except KeyError:
+          node_sets[set_name] = node_labels
+      elif keyword == "elset":
         set_name = params[0].split("=")[1].strip().replace("\"", "")
-        # todo element set handling
+        if any("internal" == p.lower() for p in params[1:]) and not read_internal_sets:
+          continue
+        if any("instance" in p.lower() for p in params[1:]):
+          if not any(instance_name.lower() in p.lower() for p in params[1:]):
+            continue
+        elif not in_part:
+          continue
+        if "generate" in params:
+          element_labels = range(int(line_split[0]), int(line_split[1]), int(line_split[2]))
+        else:
+          element_labels = [int(nl) for nl in line_split if nl != ""]
+        try:
+          element_sets[set_name].extend(element_labels)
+        except KeyError:
+          element_sets[set_name] = element_labels
       elif keyword == "surface":
-        # todo surface handling
-        pass
+        pass  # todo surface handling
       else:
-        # todo solid section handling
-        print "Warning: unknown keyword \"{}\"".format(keyword)
-    if not part_found:
-      raise ValueError("part \"{}\" not found in {}".format(part_name, inp_file_path))
+        pass
+
+    for set_name, node_labels in node_sets.items():
+      nodes.add_set(set_name, node_labels)
+    for set_name, element_labels in element_sets.items():
+      mesh.add_set(set_name, element_labels)
     mesh.labels, mesh.connectivity, mesh.space, mesh.name = sort_multiple_by_labels(mesh.labels, mesh.connectivity,
                                                                                     mesh.space, mesh.name)
     nodes.labels, nodes.x, nodes.y, nodes.z = sort_multiple_by_labels(nodes.labels, nodes.x, nodes.y, nodes.z)
     return mesh
-
-
 
 
 class HistoryOutput(object):
