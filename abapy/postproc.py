@@ -74,6 +74,7 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
   from mesh import Mesh, Nodes
   from array import array
   import numpy as np
+
   def sort_multiple_by_labels(labels, *vectors):
     ix = np.argsort(labels)
     try:
@@ -121,7 +122,6 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
           in_part = True
         elif keyword == "end part":
           in_part = False
-        # print "line {} *{}".format(line_no, keyword)
         continue
 
       line_split = tuple(item.strip() for item in line.split(","))
@@ -179,8 +179,6 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
           element_sets[set_name].extend(element_labels)
         except KeyError:
           element_sets[set_name] = element_labels
-      elif keyword == "surface":
-        pass  # todo surface handling
       else:
         pass
 
