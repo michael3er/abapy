@@ -2747,11 +2747,4 @@ def get_neighbors(points, crit_dist = 0.1, max_hits = 1):
       if d and (l > i) and (l not in hits): 
         n.append(l)  
         hits.append(l)
-  return neighbors 
-  
-
-
-inp_file_path="C:\Users\Michael\ABAQUS\ISO1_0.inp"
-part_name="Inlay_M10_right_JWI"
-from abapy.postproc import GetMesh_byInp
-mesh=GetMesh_byInp(inp_file_path, part_name)
+  return neighbors

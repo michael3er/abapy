@@ -13,6 +13,7 @@ Todo list for abapy
 ### In Progress
 - [ ] speed improvements
   - [ ] vectorize class methods in mesh and postproc using numpy
-  - [ ] get mesh from inp file
+  - [X] get mesh from inp file
+  - [ ] get odb mesh quickly by importing instance to mdb and exporting as inp
 
 ### Done ✓
