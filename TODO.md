@@ -1,11 +1,10 @@
-# wearpy
+# abapy
 Todo list for abapy
 
 ### Todo
 - [ ] mesh capabilities improvements
   - [ ] consider pull mesh_overhauls from orig repo
   - [ ] add missing quadratic 3D elements to mesh
-- [ ] FieldOutput und VectorFieldOutput add, substract etc., also field with diff size?
 - [ ] replace array.array with numpy array throughout
 - [ ] reformat to comply with PEP8
 
