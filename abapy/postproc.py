@@ -56,17 +56,19 @@ def GetMesh(odb,instance,dti='I'):
   return mesh
 
 
-def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_internal_sets=False):
+def GetMesh_byInp(inp_file_path, instance, dti='I', apply_assembly_transform=True, read_internal_sets=False):
   '''Retrieves mesh of an instance in an Abaqus input file.
 
   :param inp_file_path: file path of .inp file
   :type inp_file_path: string
-  :param instance_name: instance name declared in the Abaqus inp file.
-  :type instance_name: string
-  :param part_name: part name declared in the Abaqus inp file.
-  :type part_name: string
+  :param instance: instance name declared in the Abaqus inp file.
+  :type instance: string
   :param dti: int data type in array.array
   :type dti: 'I' or 'H'
+  :param apply_assembly_transform: Get node coordinates in assembly (True) or part (False) coordinate system
+  :type apply_assembly_transform: bool
+  :param read_internal_sets: read internal sets or not
+  :type read_internal_sets: bool
 
   :rtype: Mesh instance
   '''
@@ -88,32 +90,72 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
         out.append(type(v)(np.asarray(v)[ix]))
     return tuple(out)
 
-  if part_name is None:
-    with open(inp_file_path) as inp_file:
-      for line in inp_file:
-        if not line[0] == "*":  # for speed, hopefully
-          continue
-        if line.lower().startswith("*instance"):  # find line containing Instance keyword
-          line_split = tuple(item.strip() for item in line.split(","))
-          if instance_name.lower() in line.lower():
-            for p in line_split[1:]:
-              if "part" in p.lower() and instance_name.lower() in p.lower():
-                part_name = p.split("=")[1].strip().replace("\"", "")
+  part_name = None
+  with open(inp_file_path) as inp_file:
+    for line in inp_file:
+      if not line[0] == "*":  # for speed, hopefully
+        continue
+      if line.lower().startswith("*instance"):  # find line containing Instance keyword
+        line_split = tuple(item.strip() for item in line.split(","))
+        if instance.lower() in line.lower():
+          for p in line_split[1:]:
+            if "part" in p.lower():
+              part_name = p.split("=")[1].strip().replace("\"", "")
+              line = inp_file.next()
+              if line.startswith("*") or not apply_assembly_transform:
+                trans = np.array([0, 0, 0])
+                rot = np.array([0, 0, 0, 1, 1, 1, 0])
                 break
+              trans = np.array([np.float(item.strip()) for item in line.split(",")])
+              line = inp_file.next()
+              if line.startswith("*"):
+                rot = np.array([0, 0, 0, 1, 1, 1, 0])
+                break
+              rot = np.array([np.float(item.strip()) for item in line.split(",")])
+              break
+
   if part_name is None:
-    raise ValueError("part name for instance {} not found".format(instance_name))
+    raise ValueError("part name for instance {} not found".format(instance))
+
+  Tr = np.array([[1, 0, 0, trans[0]],
+                 [0, 1, 0, trans[1]],
+                 [0, 0, 1, trans[2]],
+                 [0, 0, 0, 1]])
+  # calculate transform for rotation about arbitrary axis
+  # adapted from https://www.engr.uvic.ca/~mech410/lectures/4_2_RotateArbi.pdf
+  a = rot[3] - rot[0]
+  b = rot[4] - rot[1]
+  c = rot[5] - rot[2]
+  l = np.linalg.norm([a, b, c])
+  v = np.linalg.norm([b, c])
+  D = np.array([[1, 0, 0, -rot[0]],
+                [0, 1, 0, -rot[1]],
+                [0, 0, 1, -rot[2]],
+                [0, 0, 0, 1]])
+  Rx = np.array([[1, 0, 0, 0],
+                 [0, c/v, -b/v, 0],
+                 [0, b/v, c/v, 0],
+                 [0, 0, 0, 1]])
+  Ry = np.array([[v/l, 0, -a/l, 0],
+                 [0, 1, -b/v, 0],
+                 [a/l, 0, v/l, 0],
+                 [0, 0, 0, 1]])
+  cos_theta = np.cos(np.deg2rad(rot[6]))
+  sin_theta = np.sin(np.deg2rad(rot[6]))
+  Rz = np.array([[cos_theta, -sin_theta, 0, 0],
+                 [sin_theta, cos_theta, 0, 0],
+                 [0, 0, 1, 0],
+                 [0, 0, 0, 1]])
+  T = np.linalg.inv(D).dot(np.linalg.inv(Rx)).dot(np.linalg.inv(Ry)).dot(Rz).dot(Ry).dot(Rx).dot(D)
+  T = T.dot(Tr)  # translation is applied before rotation
 
   with open(inp_file_path) as inp_file:
-    dtf = 'd'
-    dti = 'I'
-    nodes = Nodes(dtf=dtf, dti=dti)
+    nodes = Nodes(dtf='d', dti=dti)
     mesh = Mesh(nodes=nodes)
     in_part = False
-    line_no = -1
     node_sets = dict()
     element_sets = dict()
     for line in inp_file:
-      line_no += 1
       if line[0] == "*":
         line_split = [item.strip() for item in line.split(",")]
         keyword = line_split[0].strip().lower()[1:]
@@ -125,13 +167,17 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
         continue
 
       line_split = tuple(item.strip() for item in line.split(","))
+
       if keyword == "node":
         if not in_part:
           continue
+        point = np.array([float(line_split[1]), float(line_split[2]), float(line_split[3]), 1])
+        point = T.dot(point)
         mesh.nodes.labels.append(int(line_split[0]))
-        mesh.nodes.x.append(float(line_split[1]))
-        mesh.nodes.y.append(float(line_split[2]))
-        mesh.nodes.z.append(float(line_split[3]))
+        mesh.nodes.x.append(point[0])
+        mesh.nodes.y.append(point[1])
+        mesh.nodes.z.append(point[2])
+
       elif keyword == "element":
         if not in_part:
           continue
@@ -143,6 +189,7 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
         mesh.labels.append(label)
         mesh.space.append(space)
         mesh.name.append(element_type)
+
       elif keyword == "nset":
         set_name = params[0].split("=")[1].strip().replace("\"", "")
         if any("internal" == p.lower() for p in params[1:]) and not read_internal_sets:
@@ -150,35 +197,37 @@ def GetMesh_byInp(inp_file_path, instance_name, part_name=None, dti='I', read_in
         if any("elset" in p.lower() for p in params[1:]):
           raise NotImplementedError("ELSET= in *NSET")
         if any("instance" in p.lower() for p in params[1:]):
-          if not any(instance_name.lower() in p.lower() for p in params[1:]):
+          if not any(instance.lower() in p.lower() for p in params[1:]):
             continue
         elif not in_part:
           continue
         if "generate" in params:
-          node_labels = range(int(line_split[0]), int(line_split[1]), int(line_split[2]))
+          node_labels = range(int(line_split[0]), int(line_split[1])+1, int(line_split[2]))
         else:
           node_labels = [int(nl) for nl in line_split if nl != ""]
         try:
           node_sets[set_name].extend(node_labels)
         except KeyError:
           node_sets[set_name] = node_labels
+
       elif keyword == "elset":
         set_name = params[0].split("=")[1].strip().replace("\"", "")
         if any("internal" == p.lower() for p in params[1:]) and not read_internal_sets:
           continue
         if any("instance" in p.lower() for p in params[1:]):
-          if not any(instance_name.lower() in p.lower() for p in params[1:]):
+          if not any(instance.lower() in p.lower() for p in params[1:]):
             continue
         elif not in_part:
           continue
         if "generate" in params:
-          element_labels = range(int(line_split[0]), int(line_split[1]), int(line_split[2]))
+          element_labels = range(int(line_split[0]), int(line_split[1])+1, int(line_split[2]))
         else:
           element_labels = [int(nl) for nl in line_split if nl != ""]
         try:
           element_sets[set_name].extend(element_labels)
         except KeyError:
           element_sets[set_name] = element_labels
+
       else:
         pass
 
