@@ -99,7 +99,7 @@ def GetMesh_byInp(inp_file_path, instance, dti='I', apply_assembly_transform=Tru
         line_split = tuple(item.strip() for item in line.split(","))
         if instance.lower() in line.lower():
           for p in line_split[1:]:
-            if "part" in p.lower():
+            if "part=" in p.lower().replace(" ",""):
               part_name = p.split("=")[1].strip().replace("\"", "")
               line = inp_file.next()
               if line.startswith("*") or not apply_assembly_transform:
