@@ -127,19 +127,29 @@ def GetMesh_byInp(inp_file_path, instance, dti='I', apply_assembly_transform=Tru
   b = rot[4] - rot[1]
   c = rot[5] - rot[2]
   l = np.linalg.norm([a, b, c])
+  if l==0:  # handle zero divison
+    raise ValueError("Length of rotation axis vector is zero")
   v = np.linalg.norm([b, c])
+  if v==0:  # handle zero divison
+    s1 = 0
+    c1 = 1
+  else:
+    s1 = b/v
+    c1 = c/v
+  s2 = -a/l
+  c2 = v/l
   D = np.array([[1, 0, 0, -rot[0]],
                 [0, 1, 0, -rot[1]],
                 [0, 0, 1, -rot[2]],
-                [0, 0, 0, 1]])
-  Rx = np.array([[1, 0, 0, 0],
-                 [0, c/v, -b/v, 0],
-                 [0, b/v, c/v, 0],
-                 [0, 0, 0, 1]])
-  Ry = np.array([[v/l, 0, -a/l, 0],
-                 [0, 1, -b/v, 0],
-                 [a/l, 0, v/l, 0],
-                 [0, 0, 0, 1]])
+                [0, 0, 0,  1]])
+  Rx = np.array([[1,  0,   0, 0],
+                 [0, c1, -s1, 0],
+                 [0, s1,  c1, 0],
+                 [0,  0,   0, 1]])
+  Ry = np.array([[ c2, 0, s2, 0],
+                 [  0, 1,  0, 0],
+                 [-s2, 0, c2, 0],
+                 [  0, 0,  0, 1]])
   cos_theta = np.cos(np.deg2rad(rot[6]))
   sin_theta = np.sin(np.deg2rad(rot[6]))
   Rz = np.array([[cos_theta, -sin_theta, 0, 0],
@@ -148,7 +158,7 @@ def GetMesh_byInp(inp_file_path, instance, dti='I', apply_assembly_transform=Tru
                  [0, 0, 0, 1]])
   T = np.linalg.inv(D).dot(np.linalg.inv(Rx)).dot(np.linalg.inv(Ry)).dot(Rz).dot(Ry).dot(Rx).dot(D)
   T = T.dot(Tr)  # translation is applied before rotation
-
+  print T
   with open(inp_file_path) as inp_file:
     nodes = Nodes(dtf='d', dti=dti)
     mesh = Mesh(nodes=nodes)

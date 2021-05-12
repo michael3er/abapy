@@ -1086,9 +1086,11 @@ class Mesh(object):
     conn = self.connectivity
     sets = self.sets
     surfaces = self.surfaces
-    i = labels.index(label)
-    labels.remove(label)
-    conn.pop(i)
+    i = self.labels.index(label)
+    self.labels.remove(label)
+    self.connectivity.pop(i)
+    self.name.pop(i)
+    self.space.pop(i)
     for k in sets.keys():
       if label in sets[k]: sets[k].remove(label) 
       if len(sets[k]) == 0: 
