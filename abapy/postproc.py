@@ -158,7 +158,6 @@ def GetMesh_byInp(inp_file_path, instance, dti='I', apply_assembly_transform=Tru
                  [0, 0, 0, 1]])
   T = np.linalg.inv(D).dot(np.linalg.inv(Rx)).dot(np.linalg.inv(Ry)).dot(Rz).dot(Ry).dot(Rx).dot(D)
   T = T.dot(Tr)  # translation is applied before rotation
-  print T
   with open(inp_file_path) as inp_file:
     nodes = Nodes(dtf='d', dti=dti)
     mesh = Mesh(nodes=nodes)
